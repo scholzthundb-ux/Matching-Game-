@@ -23,9 +23,7 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
       background:var(--bg);
       color:var(--text);
-      /* verhindert "ziehen" / horizontales Scrollen */
       overflow-x:hidden;
-      /* verhindert iOS Overscroll-Bounce */
       overscroll-behavior: none;
       touch-action: manipulation;
     }
@@ -86,7 +84,6 @@
     .msg{font-size:14px;font-weight:1000;min-height:18px;}
     .msg.ok{color:var(--ok);} .msg.bad{color:var(--bad);}
 
-    /* >>> WICHTIG: Board "fest" halten, kein Verschieben, keine horizontalen Scrolls */
     .board{
       flex:1;
       display:grid;
@@ -94,10 +91,9 @@
       gap:12px;
       height: calc(100vh - 175px);
       padding:6px;
-      /* verhindert horizontales Verschieben des ganzen Boards */
       overflow:hidden;
-      touch-action: pan-y;           /* nur vertikales Scrollen zulassen */
-      overscroll-behavior-x: none;   /* kein seitliches "Bounce" */
+      touch-action: pan-y;
+      overscroll-behavior-x: none;
     }
     @media (max-width:700px){.board{gap:10px;height: calc(100vh - 215px);}}
 
@@ -107,13 +103,11 @@
       padding:10px;
       background:#fff;
       box-shadow:var(--shadow);
-      /* Spalten selbst sollen NICHT seitlich scrollen, nur innen vertikal */
       overflow:hidden;
       min-width:0;
     }
     .colTitle{font-weight:1000;margin:0 0 10px 0;font-size:14px;}
 
-    /* Kartenliste: nur vertikal scrollen, aber in der Praxis bei 6 Karten meist nicht nötig */
     .cards{
       display:flex;
       flex-direction:column;
@@ -136,7 +130,6 @@
       user-select:none;
       transition:transform .05s ease, outline-color .1s ease;
       outline:3px solid transparent;
-      /* verhindert "Drag" / Text markieren */
       -webkit-user-select:none;
       -webkit-touch-callout:none;
       touch-action: manipulation;
@@ -195,13 +188,17 @@
         <div class="row" style="margin-top:10px;">
           <button id="btnAnalyze">Liste analysieren (Vorschau)</button>
           <button class="primary" id="btnImport">Importieren / Aktualisieren</button>
-          <button id="btnClear">Alles löschen</button>
+
+          <!-- >>> NEU: Liste leeren -->
+          <button class="danger" id="btnEmptyList">Liste leeren</button>
         </div>
 
         <div class="row" style="margin-top:10px;">
           <button id="btnExport">Backup exportieren (TXT)</button>
           <input type="file" id="fileImport" accept=".txt,text/plain" style="display:none;">
           <button id="btnImportTxt">TXT laden</button>
+
+          <!-- (optional) "Alles löschen" rausgenommen, weil "Liste leeren" genau das ist -->
         </div>
 
         <p class="muted" id="importInfo" style="margin:10px 0 0 0;"></p>
@@ -312,12 +309,8 @@
 /* =========================
    CONFIG
 ========================= */
-const STORAGE_KEY = "vokabel_matching_semikolon_v3";
-
-// >>> Änderung 1: nur 6 Karten pro Spalte
+const STORAGE_KEY = "vokabel_matching_semikolon_v4";
 const MAX_SLOTS = 6;
-
-// unverändert:
 const TARGET_CORRECT = 100;
 const POOL_SIZE = 50;
 
@@ -653,15 +646,20 @@ document.getElementById("btnImport").addEventListener("click", () => {
   renderPreview();
 });
 
-document.getElementById("btnClear").addEventListener("click", () => {
+/* >>> NEU: Liste leeren (löscht nur gespeicherte Paare, Textfeld bleibt) */
+document.getElementById("btnEmptyList").addEventListener("click", () => {
+  const ok = confirm("Liste wirklich leeren? (Alle gespeicherten Karten werden gelöscht.)");
+  if(!ok) return;
+
   pairs = [];
   savePairs(pairs);
-  bulkInput.value = "";
-  previewEntries = [];
-  renderPreview();
   renderList();
   updateCounts();
-  setImportInfo("Alles gelöscht.");
+
+  previewEntries = [];
+  renderPreview();
+
+  setImportInfo("Liste geleert. In der App: 0.");
 });
 
 document.getElementById("btnAddOne").addEventListener("click", () => {
