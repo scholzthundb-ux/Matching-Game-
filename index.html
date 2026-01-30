@@ -139,6 +139,7 @@
     .card.correctFlash{outline-color:var(--ok);}
     .card.wrongFlash{outline-color:var(--bad);}
     .leftText{font-weight:1000;}
+    .rightText{font-weight:1000;} /* Antworten fett */
     .starLine{margin-top:5px;font-size:12px;color:var(--muted);font-weight:900;}
     .footerBar{display:flex;gap:10px;justify-content:flex-end;padding:10px 6px 14px 6px;flex-wrap:wrap;}
   </style>
@@ -188,8 +189,6 @@
         <div class="row" style="margin-top:10px;">
           <button id="btnAnalyze">Liste analysieren (Vorschau)</button>
           <button class="primary" id="btnImport">Importieren / Aktualisieren</button>
-
-          <!-- >>> NEU: Liste leeren -->
           <button class="danger" id="btnEmptyList">Liste leeren</button>
         </div>
 
@@ -197,8 +196,6 @@
           <button id="btnExport">Backup exportieren (TXT)</button>
           <input type="file" id="fileImport" accept=".txt,text/plain" style="display:none;">
           <button id="btnImportTxt">TXT laden</button>
-
-          <!-- (optional) "Alles löschen" rausgenommen, weil "Liste leeren" genau das ist -->
         </div>
 
         <p class="muted" id="importInfo" style="margin:10px 0 0 0;"></p>
@@ -309,7 +306,7 @@
 /* =========================
    CONFIG
 ========================= */
-const STORAGE_KEY = "vokabel_matching_semikolon_v4";
+const STORAGE_KEY = "vokabel_matching_semikolon_v5";
 const MAX_SLOTS = 6;
 const TARGET_CORRECT = 100;
 const POOL_SIZE = 50;
@@ -646,20 +643,12 @@ document.getElementById("btnImport").addEventListener("click", () => {
   renderPreview();
 });
 
-/* >>> NEU: Liste leeren (löscht nur gespeicherte Paare, Textfeld bleibt) */
+/* >>> Liste leeren = nur Eingabekiste leeren, NICHT gespeicherte Paare */
 document.getElementById("btnEmptyList").addEventListener("click", () => {
-  const ok = confirm("Liste wirklich leeren? (Alle gespeicherten Karten werden gelöscht.)");
-  if(!ok) return;
-
-  pairs = [];
-  savePairs(pairs);
-  renderList();
-  updateCounts();
-
+  bulkInput.value = "";
   previewEntries = [];
   renderPreview();
-
-  setImportInfo("Liste geleert. In der App: 0.");
+  setImportInfo("Eingabefeld geleert. Gespeicherte Vokabeln bleiben unverändert.");
 });
 
 document.getElementById("btnAddOne").addEventListener("click", () => {
@@ -795,7 +784,7 @@ function renderBoard(){
     div.className = "card";
     div.dataset.slotId = item.slotId;
     div.innerHTML = `
-      <div>${escapeHtml(item.text)}</div>
+      <div class="rightText">${escapeHtml(item.text)}</div>
       <div class="starLine">${item.star ? starsToText(item.star) : ""}</div>
     `;
     div.addEventListener("click", () => onRightClick(item.slotId));
