@@ -117,15 +117,16 @@
     <div class="grid2">
 
       <div class="panel">
-        <h2 style="margin:0 0 10px 0; font-size:16px;">Vokabelliste eingeben + Import</h2>
+        <h2 style="margin:0 0 10px 0; font-size:16px;">Vokabelliste importieren</h2>
 
         <p class="muted" style="margin-top:0;">
-          Pro Zeile: <span class="pill">Vokabel = Übersetzung</span> oder <span class="pill">Vokabel;Übersetzung</span><br>
-          Sterne pro Zeile: <span class="pill">*</span> / <span class="pill">**</span> / <span class="pill">***</span> oder <span class="pill">[1]</span>/<span class="pill">[2]</span>/<span class="pill">[3]</span><br>
-          Ganze Liste als Favorit möglich (mit Option, Zeilen-Sterne zu behalten).
+          <b>Import-Format:</b> <span class="pill">Vokabel;Übersetzung</span> (genau ein Semikolon als Trenner)<br>
+          Optional am Zeilenende: <span class="pill">*</span> / <span class="pill">**</span> / <span class="pill">***</span>
+          oder <span class="pill">[1]</span>/<span class="pill">[2]</span>/<span class="pill">[3]</span><br>
+          Zusätzlich kannst du eine <b>ganze Liste</b> mit ★ / ★★ / ★★★ markieren.
         </p>
 
-        <textarea id="bulkInput" placeholder="das Boot;la barca&#10;die Schubkarre;la carretilla **&#10;der Kreisel = la peonza [3]"></textarea>
+        <textarea id="bulkInput" placeholder="das Boot;la barca&#10;die Schubkarre;la carretilla **&#10;das Pony;el poni [3]"></textarea>
 
         <div class="row" style="margin-top:10px; align-items:center;">
           <span class="mini">Ganze Liste als Favorit:</span>
@@ -138,7 +139,7 @@
 
           <label class="row" style="gap:8px;">
             <input type="checkbox" id="keepLineStars" checked>
-            <span class="mini">Zeilen mit Sternchen nicht überschreiben</span>
+            <span class="mini">Zeilen-Sterne nicht überschreiben</span>
           </label>
         </div>
 
@@ -182,6 +183,10 @@
       <div class="panel">
         <h2 style="margin:0 0 10px 0; font-size:16px;">Einzelnen Eintrag hinzufügen</h2>
 
+        <p class="muted" style="margin-top:0;">
+          Auch hier bitte mit Semikolon-Logik denken: links = Vokabel, rechts = Übersetzung.
+        </p>
+
         <div class="row" style="width:100%;">
           <div style="flex:1; min-width:220px;">
             <input id="oneLeft" placeholder="Vokabel (links)" />
@@ -205,7 +210,7 @@
         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
 
         <h2 style="margin:0 0 10px 0; font-size:16px;">Aktuelle Liste</h2>
-        <p class="muted" style="margin-top:0;">Sterne anklicken zum Umschalten. Hier kannst du Favoriten nachträglich setzen/entfernen.</p>
+        <p class="muted" style="margin-top:0;">Sterne anklicken zum Umschalten. Löschen pro Zeile.</p>
 
         <div style="max-height:470px; overflow:auto; border:1px solid var(--border); border-radius:14px;">
           <table class="listTable" id="listTable">
@@ -261,15 +266,18 @@
 
 <script>
 /* =========================
-   CONFIG / STORAGE
+   CONFIG
 ========================= */
-const STORAGE_KEY = "vokabel_match_pairs_importfix_v1";
+const STORAGE_KEY = "vokabel_matching_semikolon_v2";
 
-// Spielregeln:
-const MAX_SLOTS = 8;         // 8 Karten pro Spalte
-const TARGET_CORRECT = 100;  // 100 richtige Matches
-const POOL_SIZE = 50;        // 50 verschiedene Paare pro Durchlauf
+// Matching-Setup
+const MAX_SLOTS = 8;         // 8 Karten je Spalte
+const TARGET_CORRECT = 100;  // 100 richtige Zuordnungen pro Durchlauf
+const POOL_SIZE = 50;        // Pool aus 50 Paaren, Wiederholungen möglich
 
+/* =========================
+   HELPERS
+========================= */
 function clampStar(x){
   const n = Number(x);
   if(!Number.isFinite(n)) return 0;
@@ -301,6 +309,10 @@ function shuffle(arr){
   }
   return arr;
 }
+
+/* =========================
+   STORAGE
+========================= */
 function loadPairs(){
   try{
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -318,13 +330,12 @@ function savePairs(pairs){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pairs));
 }
 function toTxt(pairs){
-  return pairs.map(p => `${p.left} = ${p.right}${starsToExport(p.star)}`).join("\n");
+  // Export im IMPORT-Format (Semikolon!) – so ist Backup direkt wieder importierbar
+  return pairs.map(p => `${p.left};${p.right}${starsToExport(p.star)}`).join("\n");
 }
 
 /* =========================
-   ROBUSTER IMPORT (wichtig!)
-   - akzeptiert "=", ";", Tab
-   - Sterne am Ende: *, **, ***, [1]/[2]/[3], [***]
+   IMPORT (nur Semikolon!)
 ========================= */
 function parseStarSuffix(line){
   let t = line.trim();
@@ -345,7 +356,7 @@ function parseStarSuffix(line){
     return { text: t, star };
   }
 
-  // *** plain
+  // *** plain am Ende
   const mStars = t.match(/\s(\*{1,3})\s*$/);
   if(mStars){
     const star = clampStar(mStars[1].length);
@@ -356,43 +367,37 @@ function parseStarSuffix(line){
   return { text: t, star: 0 };
 }
 
-function splitPair(text){
-  // Erlaubte Trenner: "=", ";" oder Tab.
-  // Wir nehmen den ERSTEN passenden Trenner (in dieser Reihenfolge), damit Texte rechts weitere Zeichen enthalten dürfen.
-  const s = text;
-  const idxEq = s.indexOf("=");
-  const idxSc = s.indexOf(";");
-  const idxTb = s.indexOf("\t");
+function splitPairSemicolon(text){
+  // NUR Semikolon als Trenner.
+  // Wir splitten am ersten Semikolon, damit rechts auch mal ein weiteres Semikolon vorkommen dürfte.
+  const idx = text.indexOf(";");
+  if(idx === -1) return null;
 
-  // finde kleinsten nicht-negativen Index unter den vorhandenen Trennern
-  const candidates = [idxEq, idxSc, idxTb].filter(i => i >= 0);
-  if(candidates.length === 0) return null;
-  const idx = Math.min(...candidates);
-
-  const left = normalizeText(s.slice(0, idx));
-  const right = normalizeText(s.slice(idx + 1));
+  const left = normalizeText(text.slice(0, idx));
+  const right = normalizeText(text.slice(idx + 1));
   if(!left || !right) return null;
+
   return { left, right };
 }
 
 function parsePairsFromText(text){
   const lines = String(text).split(/\r?\n/);
   const out = [];
+  let invalid = 0;
 
   for(const rawLine of lines){
     const line = rawLine.trim();
     if(!line) continue;
 
     const { text: noStars, star } = parseStarSuffix(line);
-    const split = splitPair(noStars);
-    if(!split) continue;
+    const split = splitPairSemicolon(noStars);
+    if(!split){ invalid++; continue; }
 
     out.push({ left: split.left, right: split.right, star: clampStar(star) });
   }
-  return out;
+  return { out, invalid };
 }
 
-// Ganze Liste als Favorit anwenden
 function applyBulkStars(list){
   const bulkStar = clampStar(document.getElementById("bulkStar")?.value ?? 0);
   const keep = !!document.getElementById("keepLineStars")?.checked;
@@ -531,13 +536,13 @@ function setAllPreviewStars(n){
    EDITOR EVENTS
 ========================= */
 document.getElementById("btnAnalyze").addEventListener("click", () => {
-  const parsed = parsePairsFromText(bulkInput.value);
-  previewEntries = applyBulkStars(parsed);
+  const { out, invalid } = parsePairsFromText(bulkInput.value);
+  previewEntries = applyBulkStars(out);
 
   if(previewEntries.length === 0){
-    setImportInfo("Keine gültigen Zeilen gefunden. Erlaubt: 'Vokabel = Übersetzung' ODER 'Vokabel;Übersetzung' (optional: Sterne).");
+    setImportInfo("Keine gültigen Zeilen gefunden. Format muss sein: Vokabel;Übersetzung");
   }else{
-    setImportInfo(`Vorschau ok: ${previewEntries.length} gültige Zeilen erkannt.`);
+    setImportInfo(`Vorschau ok: ${previewEntries.length} gültige Zeilen. Ungültig: ${invalid}.`);
   }
   renderPreview();
 });
@@ -550,16 +555,16 @@ document.getElementById("setAll3").addEventListener("click", ()=>setAllPreviewSt
 document.getElementById("btnImport").addEventListener("click", () => {
   const before = pairs.length;
 
-  // Wir parsen IMMER frisch, damit Import nicht von alter Vorschau abhängt.
-  const rawParsed = parsePairsFromText(bulkInput.value);
-  const parsed = applyBulkStars(rawParsed);
+  // Import immer frisch parsen (unabhängig davon, ob Vorschau gedrückt wurde)
+  const { out, invalid } = parsePairsFromText(bulkInput.value);
+  const parsed = applyBulkStars(out);
 
   if(parsed.length === 0){
-    setImportInfo("Import abgebrochen: keine gültigen Zeilen. Nutze '=' oder ';' als Trenner.");
+    setImportInfo("Import abgebrochen: keine gültigen Zeilen. Format: Vokabel;Übersetzung");
     return;
   }
 
-  // Duplikate innerhalb des Imports entfernen (gleiche left+right)
+  // Duplikate innerhalb des Imports entfernen (left+right)
   const seen = new Set();
   const uniqueParsed = [];
   for(const p of parsed){
@@ -597,17 +602,17 @@ document.getElementById("btnImport").addEventListener("click", () => {
 
   const after = pairs.length;
 
-  // Diese Anzeige wolltest du explizit:
+  // Gewünschte Anzeige: wie viel importiert + wie viel in App
   setImportInfo(
     `Import fertig. ` +
-    `Erkannt: ${rawParsed.length} gültige Zeilen, ` +
-    `einzigartig: ${uniqueParsed.length}. ` +
+    `Gültig erkannt: ${out.length}, ` +
+    `ungültig: ${invalid}. ` +
+    `Einzigartig: ${uniqueParsed.length}. ` +
     `Neu importiert: ${added}. ` +
     `Sterne geändert: ${updatedStars}. ` +
     `In der App: ${after} (vorher ${before}).`
   );
 
-  // Vorschau passend aktualisieren
   previewEntries = uniqueParsed;
   renderPreview();
 });
@@ -630,6 +635,18 @@ document.getElementById("btnAddOne").addEventListener("click", () => {
 
   if(!l || !r){
     setImportInfo("Bitte beide Felder ausfüllen.");
+    return;
+  }
+
+  // Duplikate vermeiden (optional, aber sinnvoll)
+  const key = `${l}|||${r}`;
+  const existing = pairs.find(p => `${p.left}|||${p.right}` === key);
+  if(existing){
+    existing.star = s;
+    savePairs(pairs);
+    renderList();
+    updateCounts();
+    setImportInfo("Eintrag existierte schon – Sterne aktualisiert.");
     return;
   }
 
@@ -666,14 +683,14 @@ fileImport.addEventListener("change", async (e) => {
   bulkInput.value = text;
   previewEntries = [];
   renderPreview();
-  setImportInfo("TXT geladen. Jetzt auf „Importieren / Aktualisieren“ drücken.");
+  setImportInfo("TXT geladen. Jetzt „Importieren / Aktualisieren“ drücken.");
   fileImport.value = "";
 });
 
 document.getElementById("btnShowEditor").addEventListener("click", () => showEditor());
 
 /* =========================
-   GAME LOGIC (Pool 50, Target 100, 8+8)
+   GAME LOGIC
 ========================= */
 let session = null;
 
@@ -828,13 +845,16 @@ function onRightClick(slotId){
       setMessage("Durchlauf fertig. „Neuer Durchlauf“ startet neu gemischt (neuer Pool).", "ok");
       return;
     }
+
     fillBoard();
   }else{
     flash(leftSlot, "left", "wrongFlash");
     flash(slotId, "right", "wrongFlash");
     setMessage("Falsch ✗ — kommt im selben Durchlauf später nochmal.", "bad");
 
+    // Wiederholung im selben Block
     session.queue.push(leftItem.pairId);
+
     session.selectedLeftSlotId = null;
     renderBoard();
   }
@@ -846,16 +866,19 @@ function onRightClick(slotId){
 function showEditor(){
   gameScreen.style.display = "none";
   editorScreen.style.display = "block";
+
   pairs = loadPairs();
   bulkInput.value = toTxt(pairs);
+
   previewEntries = [];
   renderPreview();
+
   renderList();
   updateCounts();
+
   setMessage("", "");
   setImportInfo(`In der App: ${pairs.length}.`);
 }
-
 function showGame(){
   editorScreen.style.display = "none";
   gameScreen.style.display = "block";
@@ -865,11 +888,13 @@ function showGame(){
 document.getElementById("btnStart").addEventListener("click", () => {
   pairs = loadPairs();
   const pool = getPracticePool();
+
   if(pool.length < MAX_SLOTS){
     showEditor();
     setImportInfo(`Für ${MAX_SLOTS}+${MAX_SLOTS} Karten brauchst du in der gewählten Auswahl mindestens ${MAX_SLOTS} Paare.`);
     return;
   }
+
   session = newSession();
   showGame();
   fillBoard();
@@ -878,10 +903,12 @@ document.getElementById("btnStart").addEventListener("click", () => {
 document.getElementById("btnRestart").addEventListener("click", () => {
   pairs = loadPairs();
   const pool = getPracticePool();
+
   if(pool.length < MAX_SLOTS){
     setMessage(`Zu wenige Paare in dieser Auswahl (mind. ${MAX_SLOTS}).`, "bad");
     return;
   }
+
   session = newSession();
   setMessage("Neuer Durchlauf gestartet (neuer 50er-Pool).", "ok");
   fillBoard();
