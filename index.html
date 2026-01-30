@@ -17,7 +17,18 @@
       --accent:#0b57d0;
     }
     *{box-sizing:border-box;}
-    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;background:var(--bg);color:var(--text);}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+      background:var(--bg);
+      color:var(--text);
+      /* verhindert "ziehen" / horizontales Scrollen */
+      overflow-x:hidden;
+      /* verhindert iOS Overscroll-Bounce */
+      overscroll-behavior: none;
+      touch-action: manipulation;
+    }
     .app{min-height:100vh;display:flex;flex-direction:column;}
     header{
       padding:14px 16px;border-bottom:1px solid var(--border);
@@ -74,22 +85,61 @@
     .stats{font-size:14px;color:var(--muted);font-weight:900;}
     .msg{font-size:14px;font-weight:1000;min-height:18px;}
     .msg.ok{color:var(--ok);} .msg.bad{color:var(--bad);}
+
+    /* >>> WICHTIG: Board "fest" halten, kein Verschieben, keine horizontalen Scrolls */
     .board{
-      flex:1;display:grid;grid-template-columns:1fr 1fr;gap:12px;
-      height: calc(100vh - 175px); padding:6px;
+      flex:1;
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:12px;
+      height: calc(100vh - 175px);
+      padding:6px;
+      /* verhindert horizontales Verschieben des ganzen Boards */
+      overflow:hidden;
+      touch-action: pan-y;           /* nur vertikales Scrollen zulassen */
+      overscroll-behavior-x: none;   /* kein seitliches "Bounce" */
     }
     @media (max-width:700px){.board{gap:10px;height: calc(100vh - 215px);}}
-    .col{border:1px solid var(--border);border-radius:16px;padding:10px;background:#fff;box-shadow:var(--shadow);overflow:auto;}
+
+    .col{
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:10px;
+      background:#fff;
+      box-shadow:var(--shadow);
+      /* Spalten selbst sollen NICHT seitlich scrollen, nur innen vertikal */
+      overflow:hidden;
+      min-width:0;
+    }
     .colTitle{font-weight:1000;margin:0 0 10px 0;font-size:14px;}
-    .cards{display:flex;flex-direction:column;gap:10px;}
+
+    /* Kartenliste: nur vertikal scrollen, aber in der Praxis bei 6 Karten meist nicht nötig */
+    .cards{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      overflow-y:auto;
+      overflow-x:hidden;
+      max-height: calc(100% - 24px);
+      touch-action: pan-y;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
     .card{
       background:var(--card);
       border:1px solid rgba(0,0,0,.06);
-      border-radius:14px;padding:12px 12px;
+      border-radius:14px;
+      padding:12px 12px;
       box-shadow:0 1px 6px rgba(0,0,0,.05);
-      cursor:pointer;user-select:none;
+      cursor:pointer;
+      user-select:none;
       transition:transform .05s ease, outline-color .1s ease;
       outline:3px solid transparent;
+      /* verhindert "Drag" / Text markieren */
+      -webkit-user-select:none;
+      -webkit-touch-callout:none;
+      touch-action: manipulation;
     }
     .card:active{transform:scale(.99);}
     .card.selected{outline-color:var(--accent);}
@@ -120,10 +170,9 @@
         <h2 style="margin:0 0 10px 0; font-size:16px;">Vokabelliste importieren</h2>
 
         <p class="muted" style="margin-top:0;">
-          <b>Import-Format:</b> <span class="pill">Vokabel;Übersetzung</span> (genau ein Semikolon als Trenner)<br>
+          <b>Import-Format:</b> <span class="pill">Vokabel;Übersetzung</span><br>
           Optional am Zeilenende: <span class="pill">*</span> / <span class="pill">**</span> / <span class="pill">***</span>
-          oder <span class="pill">[1]</span>/<span class="pill">[2]</span>/<span class="pill">[3]</span><br>
-          Zusätzlich kannst du eine <b>ganze Liste</b> mit ★ / ★★ / ★★★ markieren.
+          oder <span class="pill">[1]</span>/<span class="pill">[2]</span>/<span class="pill">[3]</span>
         </p>
 
         <textarea id="bulkInput" placeholder="das Boot;la barca&#10;die Schubkarre;la carretilla **&#10;das Pony;el poni [3]"></textarea>
@@ -183,10 +232,6 @@
       <div class="panel">
         <h2 style="margin:0 0 10px 0; font-size:16px;">Einzelnen Eintrag hinzufügen</h2>
 
-        <p class="muted" style="margin-top:0;">
-          Auch hier bitte mit Semikolon-Logik denken: links = Vokabel, rechts = Übersetzung.
-        </p>
-
         <div class="row" style="width:100%;">
           <div style="flex:1; min-width:220px;">
             <input id="oneLeft" placeholder="Vokabel (links)" />
@@ -210,7 +255,6 @@
         <hr style="border:none; border-top:1px solid var(--border); margin:14px 0;">
 
         <h2 style="margin:0 0 10px 0; font-size:16px;">Aktuelle Liste</h2>
-        <p class="muted" style="margin-top:0;">Sterne anklicken zum Umschalten. Löschen pro Zeile.</p>
 
         <div style="max-height:470px; overflow:auto; border:1px solid var(--border); border-radius:14px;">
           <table class="listTable" id="listTable">
@@ -268,12 +312,14 @@
 /* =========================
    CONFIG
 ========================= */
-const STORAGE_KEY = "vokabel_matching_semikolon_v2";
+const STORAGE_KEY = "vokabel_matching_semikolon_v3";
 
-// Matching-Setup
-const MAX_SLOTS = 8;         // 8 Karten je Spalte
-const TARGET_CORRECT = 100;  // 100 richtige Zuordnungen pro Durchlauf
-const POOL_SIZE = 50;        // Pool aus 50 Paaren, Wiederholungen möglich
+// >>> Änderung 1: nur 6 Karten pro Spalte
+const MAX_SLOTS = 6;
+
+// unverändert:
+const TARGET_CORRECT = 100;
+const POOL_SIZE = 50;
 
 /* =========================
    HELPERS
@@ -330,17 +376,15 @@ function savePairs(pairs){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(pairs));
 }
 function toTxt(pairs){
-  // Export im IMPORT-Format (Semikolon!) – so ist Backup direkt wieder importierbar
   return pairs.map(p => `${p.left};${p.right}${starsToExport(p.star)}`).join("\n");
 }
 
 /* =========================
-   IMPORT (nur Semikolon!)
+   IMPORT (nur Semikolon)
 ========================= */
 function parseStarSuffix(line){
   let t = line.trim();
 
-  // [3] / [2] / [1]
   const mNum = t.match(/\s*\[(\d)\]\s*$/);
   if(mNum){
     const star = clampStar(mNum[1]);
@@ -348,7 +392,6 @@ function parseStarSuffix(line){
     return { text: t, star };
   }
 
-  // [***] / [**] / [*]
   const mBracketStars = t.match(/\s*\[(\*{1,3})\]\s*$/);
   if(mBracketStars){
     const star = clampStar(mBracketStars[1].length);
@@ -356,7 +399,6 @@ function parseStarSuffix(line){
     return { text: t, star };
   }
 
-  // *** plain am Ende
   const mStars = t.match(/\s(\*{1,3})\s*$/);
   if(mStars){
     const star = clampStar(mStars[1].length);
@@ -368,8 +410,6 @@ function parseStarSuffix(line){
 }
 
 function splitPairSemicolon(text){
-  // NUR Semikolon als Trenner.
-  // Wir splitten am ersten Semikolon, damit rechts auch mal ein weiteres Semikolon vorkommen dürfte.
   const idx = text.indexOf(";");
   if(idx === -1) return null;
 
@@ -555,7 +595,6 @@ document.getElementById("setAll3").addEventListener("click", ()=>setAllPreviewSt
 document.getElementById("btnImport").addEventListener("click", () => {
   const before = pairs.length;
 
-  // Import immer frisch parsen (unabhängig davon, ob Vorschau gedrückt wurde)
   const { out, invalid } = parsePairsFromText(bulkInput.value);
   const parsed = applyBulkStars(out);
 
@@ -564,7 +603,6 @@ document.getElementById("btnImport").addEventListener("click", () => {
     return;
   }
 
-  // Duplikate innerhalb des Imports entfernen (left+right)
   const seen = new Set();
   const uniqueParsed = [];
   for(const p of parsed){
@@ -574,7 +612,6 @@ document.getElementById("btnImport").addEventListener("click", () => {
     uniqueParsed.push(p);
   }
 
-  // bestehende Paare indexieren
   const map = new Map();
   pairs.forEach((p, idx) => map.set(`${p.left}|||${p.right}`, idx));
 
@@ -602,7 +639,6 @@ document.getElementById("btnImport").addEventListener("click", () => {
 
   const after = pairs.length;
 
-  // Gewünschte Anzeige: wie viel importiert + wie viel in App
   setImportInfo(
     `Import fertig. ` +
     `Gültig erkannt: ${out.length}, ` +
@@ -638,7 +674,6 @@ document.getElementById("btnAddOne").addEventListener("click", () => {
     return;
   }
 
-  // Duplikate vermeiden (optional, aber sinnvoll)
   const key = `${l}|||${r}`;
   const existing = pairs.find(p => `${p.left}|||${p.right}` === key);
   if(existing){
@@ -852,7 +887,6 @@ function onRightClick(slotId){
     flash(slotId, "right", "wrongFlash");
     setMessage("Falsch ✗ — kommt im selben Durchlauf später nochmal.", "bad");
 
-    // Wiederholung im selben Block
     session.queue.push(leftItem.pairId);
 
     session.selectedLeftSlotId = null;
